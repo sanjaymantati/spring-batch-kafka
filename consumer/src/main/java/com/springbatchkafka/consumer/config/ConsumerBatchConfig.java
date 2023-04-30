@@ -1,7 +1,10 @@
 package com.springbatchkafka.consumer.config;
 
+import com.springbatchkafka.consumer.dto.TransactionDto;
 import com.springbatchkafka.consumer.entity.FinTransaction;
-import com.springbatchkafka.consumer.writer.FinTransactionItemWriter;
+import com.springbatchkafka.consumer.processor.TransactionItemProcessor;
+import com.springbatchkafka.consumer.repository.TransactionRepository;
+import com.springbatchkafka.consumer.writer.TransactionItemWriter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.*;
@@ -10,11 +13,10 @@ import org.springframework.batch.core.configuration.annotation.StepBuilderFactor
 import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.core.launch.JobLauncher;
 import org.springframework.batch.core.launch.support.RunIdIncrementer;
-import org.springframework.batch.core.step.tasklet.Tasklet;
+import org.springframework.batch.item.ItemProcessor;
 import org.springframework.batch.item.ItemWriter;
 import org.springframework.batch.item.kafka.KafkaItemReader;
 import org.springframework.batch.item.kafka.builder.KafkaItemReaderBuilder;
-import org.springframework.batch.repeat.RepeatStatus;
 import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -35,20 +37,21 @@ public class ConsumerBatchConfig {
     private final StepBuilderFactory stepBuilders;
     private final JobLauncher jobLauncher;
     private final KafkaProperties properties;
+    private final TransactionRepository transactionRepository;
 
     @Bean
     public Job finTransactionReportJob() {
         return jobBuilders.get("finTransactionReportJob")
                 .incrementer(new RunIdIncrementer())
                 .start(startStep())
-                .next(chunkStep())
                 .build();
     }
 
-    public Step chunkStep() {
-        return stepBuilders.get("chunkStep")
-                .<FinTransaction, FinTransaction>chunk(1000)
+    public Step startStep() {
+        return stepBuilders.get("startStep")
+                .<TransactionDto, FinTransaction>chunk(1000)
                 .reader(kafkaItemReader())
+                .processor(processor())
                 .writer(writer())
                 .build();
     }
@@ -70,37 +73,27 @@ public class ConsumerBatchConfig {
 
     @Bean
     @StepScope
-    KafkaItemReader<Long, FinTransaction> kafkaItemReader() {
+    KafkaItemReader<Long, TransactionDto> kafkaItemReader() {
         Properties props = new Properties();
-//        props.put(JsonSerializer.ADD_TYPE_INFO_HEADERS, false);
         props.putAll(this.properties.buildConsumerProperties());
-        return new KafkaItemReaderBuilder<Long, FinTransaction>()
+        return new KafkaItemReaderBuilder<Long, TransactionDto>()
                 .partitions(0,1,2,3,4,5,6,7,8,9)
                 .consumerProperties(props)
                 .name("customers-reader")
                 .saveState(true)
-                .topic("fin_transaction_insertion")
+                .topic("transaction_insertion")
                 .partitionOffsets(new HashMap<>())
                 .build();
     }
-    @Bean
-    public Step startStep() {
-        return stepBuilders.get("startStep")
-                .<FinTransaction, FinTransaction>chunk(10)
-                .writer(writer())
-                .reader(kafkaItemReader())
-                .build();
-    }
 
+    @Bean
+    @StepScope
+    public ItemProcessor<TransactionDto, FinTransaction> processor() {
+        return new TransactionItemProcessor(transactionRepository);
+    }
     @Bean
     public ItemWriter<FinTransaction> writer() {
-        return new FinTransactionItemWriter();
+        return new TransactionItemWriter(transactionRepository);
     }
 
-    @Bean
-    public Tasklet tasklet() {
-        return (contribution, chunkContext) -> {
-            return RepeatStatus.FINISHED;
-        };
-    }
 }

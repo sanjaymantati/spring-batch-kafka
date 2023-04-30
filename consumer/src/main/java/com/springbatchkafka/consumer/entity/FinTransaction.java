@@ -21,17 +21,17 @@ public class FinTransaction implements Serializable {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    protected Long id;
+    private Long id;
 
     @Column(name = "sequence")
-    protected Long sequence;
+    private Long sequence;
     @Column(name = "created_date", nullable = false, updatable = false)
     @CreatedDate
-    protected Date createdDate;
+    private Date createdDate;
 
     @Column(name = "modified_date")
     @LastModifiedDate
-    protected Date modifiedDate;
+    private Date modifiedDate;
 
     @Column(name = "account_number")
     private String accountNumber;
@@ -50,5 +50,11 @@ public class FinTransaction implements Serializable {
 
     @Column(name = "transaction_code")
     private String transactionCode;
+
+    @Column(name = "tx_charge")
+    private Double txCharge;
+
+    @Column(name = "tx_charge_calculated_at")
+    private Date txCalculatedAt;
 
 }
