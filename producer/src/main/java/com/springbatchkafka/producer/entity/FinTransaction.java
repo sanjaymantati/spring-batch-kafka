@@ -51,4 +51,10 @@ public class FinTransaction implements Serializable {
     @Column(name = "transaction_code")
     private String transactionCode;
 
+    @Column(name = "tx_charge")
+    private Double txCharge;
+
+    @Column(name = "tx_charge_calculated_at")
+    private Date txCalculatedAt;
+
 }

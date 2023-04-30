@@ -1,5 +1,6 @@
 package com.springbatchkafka.producer.service;
 
+import com.springbatchkafka.producer.dto.TransactionDto;
 import com.springbatchkafka.producer.entity.FinTransaction;
 import com.springbatchkafka.producer.enums.TransactionType;
 import com.springbatchkafka.producer.repository.FinTransactionRepository;
@@ -7,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
@@ -17,7 +19,7 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true, rollbackFor = Exception.class)
 @RequiredArgsConstructor
 @Slf4j
-public class CustomerTransactionServiceImpl implements CustomerTransactionService {
+public class TransactionServiceImpl implements TransactionService {
 
     private static final Double amountStartRange = 1000D;
     private static final Double amountEndRange = 100000D;
@@ -38,20 +40,22 @@ public class CustomerTransactionServiceImpl implements CustomerTransactionServic
     private static final List<TransactionType> typeList = Arrays.stream(TransactionType.values()).collect(Collectors.toList());
 
     private final FinTransactionRepository finTransactionRepository;
-    private final KafkaTemplate<Long, FinTransaction> kafkaTemplate;
+    private final KafkaTemplate<Long, TransactionDto> kafkaTemplate;
 
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
-    public void insertUsersInBatch(Integer transactionCount, String topic) {
+    @Transactional(propagation = Propagation.SUPPORTS, rollbackFor = Exception.class)
+    public void addTransactionsInBulk(Integer transactionCount, String topic) {
         List<FinTransaction> finTransactions = this.finTransactionRepository.findAll();
         long currentSeq = finTransactions.stream().mapToLong(FinTransaction::getSequence).max().orElse(0);
         for (int index = 0; index < transactionCount; index++) {
             FinTransaction finTransaction = buildFinTransaction();
             finTransaction.setSequence(currentSeq + index + 1);
             this.finTransactionRepository.save(finTransaction);
-            kafkaTemplate.send(topic, finTransaction.getSequence(), finTransaction);
-            log.info("Message sent in kafka on topic:{}, message:{}", topic, finTransaction);
+            TransactionDto transactionDto = new TransactionDto();
+            transactionDto.setTransactionId(finTransaction.getId());
+            kafkaTemplate.send(topic, transactionDto.getTransactionId(), transactionDto);
+            log.info("Message sent in kafka on topic:{}, message:{}", topic, transactionDto);
         }
     }
 
